@@ -4,9 +4,9 @@ import { BigInt, BigDecimal, store, Address } from '@graphprotocol/graph-ts'
 import {
   Pair,
   Token,
-  ThugswapFactory,
+  HyperswapFactory,
   Transaction,
-  ThugswapDayData,
+  HyperswapDayData,
   PairDayData,
   TokenDayData,
   Mint as MintEvent,
@@ -15,8 +15,8 @@ import {
   Bundle
 } from '../types/schema'
 import { Pair as PairContract, Mint, Burn, Swap, Transfer, Sync } from '../types/templates/Pair/Pair'
-import { updatePairDayData, updateTokenDayData, updateThugswapDayData, updatePairHourData } from './dayUpdates'
-import { getBnbPriceInUSD, findBnbPerToken, getTrackedVolumeUSD, getTrackedLiquidityUSD } from './pricing'
+import { updatePairDayData, updateTokenDayData, updateHyperswapDayData, updatePairHourData } from './dayUpdates'
+import { getFtmPriceInUSD, findFtmPerToken, getTrackedVolumeUSD, getTrackedLiquidityUSD } from './pricing'
 import {
   convertTokenToDecimal,
   ADDRESS_ZERO,
@@ -39,7 +39,7 @@ export function handleTransfer(event: Transfer): void {
     return
   }
 
-  let factory = ThugswapFactory.load(FACTORY_ADDRESS)
+  let factory = HyperswapFactory.load(FACTORY_ADDRESS)
   let transactionHash = event.transaction.hash.toHexString()
 
   // user stats
@@ -97,7 +97,7 @@ export function handleTransfer(event: Transfer): void {
     }
   }
 
-  // case where direct send first on Bnb withdrawls
+  // case where direct send first on Ftm withdrawls
   if (event.params.to.toHexString() == pair.id) {
     let burns = transaction.burns
     let burn = new BurnEvent(
@@ -201,10 +201,10 @@ export function handleSync(event: Sync): void {
   let pair = Pair.load(event.address.toHex())
   let token0 = Token.load(pair.token0)
   let token1 = Token.load(pair.token1)
-  let thugswap = ThugswapFactory.load(FACTORY_ADDRESS)
+  let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
 
   // reset factory liquidity by subtracting onluy tarcked liquidity
-  thugswap.totalLiquidityBNB = thugswap.totalLiquidityBNB.minus(pair.trackedReserveBNB as BigDecimal)
+  hyperswap.totalLiquidityFTM = hyperswap.totalLiquidityFTM.minus(pair.trackedReserveFTM as BigDecimal)
 
   // reset token total liquidity amounts
   token0.totalLiquidity = token0.totalLiquidity.minus(pair.reserve0)
@@ -224,36 +224,36 @@ export function handleSync(event: Sync): void {
 
   pair.save()
 
-  // update BNB price now that reserves could have changed
+  // update FTM price now that reserves could have changed
   let bundle = Bundle.load('1')
-  bundle.bnbPrice = getBnbPriceInUSD()
+  bundle.bnbPrice = getFtmPriceInUSD()
   bundle.save()
 
-  token0.derivedBNB = findBnbPerToken(token0 as Token)
-  token1.derivedBNB = findBnbPerToken(token1 as Token)
+  token0.derivedFTM = findFtmPerToken(token0 as Token)
+  token1.derivedFTM = findFtmPerToken(token1 as Token)
   token0.save()
   token1.save()
 
   // get tracked liquidity - will be 0 if neither is in whitelist
-  let trackedLiquidityBNB: BigDecimal
+  let trackedLiquidityFTM: BigDecimal
   if (bundle.bnbPrice.notEqual(ZERO_BD)) {
-    trackedLiquidityBNB = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
+    trackedLiquidityFTM = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
       bundle.bnbPrice
     )
   } else {
-    trackedLiquidityBNB = ZERO_BD
+    trackedLiquidityFTM = ZERO_BD
   }
 
   // use derived amounts within pair
-  pair.trackedReserveBNB = trackedLiquidityBNB
-  pair.reserveBNB = pair.reserve0
-    .times(token0.derivedBNB as BigDecimal)
-    .plus(pair.reserve1.times(token1.derivedBNB as BigDecimal))
-  pair.reserveUSD = pair.reserveBNB.times(bundle.bnbPrice)
+  pair.trackedReserveFTM = trackedLiquidityFTM
+  pair.reserveFTM = pair.reserve0
+    .times(token0.derivedFTM as BigDecimal)
+    .plus(pair.reserve1.times(token1.derivedFTM as BigDecimal))
+  pair.reserveUSD = pair.reserveFTM.times(bundle.bnbPrice)
 
   // use tracked amounts globally
-  thugswap.totalLiquidityBNB = thugswap.totalLiquidityBNB.plus(trackedLiquidityBNB)
-  thugswap.totalLiquidityUSD = thugswap.totalLiquidityBNB.times(bundle.bnbPrice)
+  hyperswap.totalLiquidityFTM = hyperswap.totalLiquidityFTM.plus(trackedLiquidityFTM)
+  hyperswap.totalLiquidityUSD = hyperswap.totalLiquidityFTM.times(bundle.bnbPrice)
 
   // now correctly set liquidity amounts for each token
   token0.totalLiquidity = token0.totalLiquidity.plus(pair.reserve0)
@@ -261,7 +261,7 @@ export function handleSync(event: Sync): void {
 
   // save entities
   pair.save()
-  thugswap.save()
+  hyperswap.save()
   token0.save()
   token1.save()
 }
@@ -272,7 +272,7 @@ export function handleMint(event: Mint): void {
   let mint = MintEvent.load(mints[mints.length - 1])
 
   let pair = Pair.load(event.address.toHex())
-  let thugswap = ThugswapFactory.load(FACTORY_ADDRESS)
+  let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
 
   let token0 = Token.load(pair.token0)
   let token1 = Token.load(pair.token1)
@@ -285,22 +285,22 @@ export function handleMint(event: Mint): void {
   token0.txCount = token0.txCount.plus(ONE_BI)
   token1.txCount = token1.txCount.plus(ONE_BI)
 
-  // get new amounts of USD and Bnb for tracking
+  // get new amounts of USD and Ftm for tracking
   let bundle = Bundle.load('1')
-  let amountTotalUSD = token1.derivedBNB
+  let amountTotalUSD = token1.derivedFTM
     .times(token1Amount)
-    .plus(token0.derivedBNB.times(token0Amount))
+    .plus(token0.derivedFTM.times(token0Amount))
     .times(bundle.bnbPrice)
 
   // update txn counts
   pair.txCount = pair.txCount.plus(ONE_BI)
-  thugswap.txCount = thugswap.txCount.plus(ONE_BI)
+  hyperswap.txCount = hyperswap.txCount.plus(ONE_BI)
 
   // save entities
   token0.save()
   token1.save()
   pair.save()
-  thugswap.save()
+  hyperswap.save()
 
   mint.sender = event.params.sender
   mint.amount0 = token0Amount as BigDecimal
@@ -316,7 +316,7 @@ export function handleMint(event: Mint): void {
   // update day entities
   updatePairDayData(event)
   updatePairHourData(event)
-  updateThugswapDayData(event)
+  updateHyperswapDayData(event)
   updateTokenDayData(token0 as Token, event)
   updateTokenDayData(token1 as Token, event)
 }
@@ -327,7 +327,7 @@ export function handleBurn(event: Burn): void {
   let burn = BurnEvent.load(burns[burns.length - 1])
 
   let pair = Pair.load(event.address.toHex())
-  let thugswap = ThugswapFactory.load(FACTORY_ADDRESS)
+  let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
 
   //update token info
   let token0 = Token.load(pair.token0)
@@ -339,22 +339,22 @@ export function handleBurn(event: Burn): void {
   token0.txCount = token0.txCount.plus(ONE_BI)
   token1.txCount = token1.txCount.plus(ONE_BI)
 
-  // get new amounts of USD and Bnb for tracking
+  // get new amounts of USD and Ftm for tracking
   let bundle = Bundle.load('1')
-  let amountTotalUSD = token1.derivedBNB
+  let amountTotalUSD = token1.derivedFTM
     .times(token1Amount)
-    .plus(token0.derivedBNB.times(token0Amount))
+    .plus(token0.derivedFTM.times(token0Amount))
     .times(bundle.bnbPrice)
 
   // update txn counts
-  thugswap.txCount = thugswap.txCount.plus(ONE_BI)
+  hyperswap.txCount = hyperswap.txCount.plus(ONE_BI)
   pair.txCount = pair.txCount.plus(ONE_BI)
 
   // update global counter and save
   token0.save()
   token1.save()
   pair.save()
-  thugswap.save()
+  hyperswap.save()
 
   // update burn
   // burn.sender = event.params.sender
@@ -372,7 +372,7 @@ export function handleBurn(event: Burn): void {
   // update day entities
   updatePairDayData(event)
   updatePairHourData(event)
-  updateThugswapDayData(event)
+  updateHyperswapDayData(event)
   updateTokenDayData(token0 as Token, event)
   updateTokenDayData(token1 as Token, event)
 }
@@ -390,24 +390,24 @@ export function handleSwap(event: Swap): void {
   let amount0Total = amount0Out.plus(amount0In)
   let amount1Total = amount1Out.plus(amount1In)
 
-  // Bnb/USD prices
+  // Ftm/USD prices
   let bundle = Bundle.load('1')
 
-  // get total amounts of derived USD and Bnb for tracking
-  let derivedAmountBNB = token1.derivedBNB
+  // get total amounts of derived USD and Ftm for tracking
+  let derivedAmountFTM = token1.derivedFTM
     .times(amount1Total)
-    .plus(token0.derivedBNB.times(amount0Total))
+    .plus(token0.derivedFTM.times(amount0Total))
     .div(BigDecimal.fromString('2'))
-  let derivedAmountUSD = derivedAmountBNB.times(bundle.bnbPrice)
+  let derivedAmountUSD = derivedAmountFTM.times(bundle.bnbPrice)
 
   // only accounts for volume through white listed tokens
   let trackedAmountUSD = getTrackedVolumeUSD(amount0Total, token0 as Token, amount1Total, token1 as Token, pair as Pair)
 
-  let trackedAmountBNB: BigDecimal
+  let trackedAmountFTM: BigDecimal
   if (bundle.bnbPrice.equals(ZERO_BD)) {
-    trackedAmountBNB = ZERO_BD
+    trackedAmountFTM = ZERO_BD
   } else {
-    trackedAmountBNB = trackedAmountUSD.div(bundle.bnbPrice)
+    trackedAmountFTM = trackedAmountUSD.div(bundle.bnbPrice)
   }
 
   // update token0 global volume and token liquidity stats
@@ -433,17 +433,17 @@ export function handleSwap(event: Swap): void {
   pair.save()
 
   // update global values, only used tracked amounts for volume
-  let thugswap = ThugswapFactory.load(FACTORY_ADDRESS)
-  thugswap.totalVolumeUSD = thugswap.totalVolumeUSD.plus(trackedAmountUSD)
-  thugswap.totalVolumeBNB = thugswap.totalVolumeBNB.plus(trackedAmountBNB)
-  thugswap.untrackedVolumeUSD = thugswap.untrackedVolumeUSD.plus(derivedAmountUSD)
-  thugswap.txCount = thugswap.txCount.plus(ONE_BI)
+  let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
+  hyperswap.totalVolumeUSD = hyperswap.totalVolumeUSD.plus(trackedAmountUSD)
+  hyperswap.totalVolumeFTM = hyperswap.totalVolumeFTM.plus(trackedAmountFTM)
+  hyperswap.untrackedVolumeUSD = hyperswap.untrackedVolumeUSD.plus(derivedAmountUSD)
+  hyperswap.txCount = hyperswap.txCount.plus(ONE_BI)
 
   // save entities
   pair.save()
   token0.save()
   token1.save()
-  thugswap.save()
+  hyperswap.save()
 
   let transaction = Transaction.load(event.transaction.hash.toHexString())
   if (transaction === null) {
@@ -485,7 +485,7 @@ export function handleSwap(event: Swap): void {
   // update day entities
   updatePairDayData(event)
   updatePairHourData(event)
-  updateThugswapDayData(event)
+  updateHyperswapDayData(event)
   updateTokenDayData(token0 as Token, event)
   updateTokenDayData(token1 as Token, event)
 
@@ -505,11 +505,11 @@ export function handleSwap(event: Swap): void {
     .concat(BigInt.fromI32(hourID).toString())
 
   // swap specific updating
-  let thugswapDayData = ThugswapDayData.load(dayID.toString())
-  thugswapDayData.dailyVolumeUSD = thugswapDayData.dailyVolumeUSD.plus(trackedAmountUSD)
-  thugswapDayData.dailyVolumeBNB = thugswapDayData.dailyVolumeBNB.plus(trackedAmountBNB)
-  thugswapDayData.dailyVolumeUntracked = thugswapDayData.dailyVolumeUntracked.plus(derivedAmountUSD)
-  thugswapDayData.save()
+  let hyperswapDayData = HyperswapDayData.load(dayID.toString())
+  hyperswapDayData.dailyVolumeUSD = hyperswapDayData.dailyVolumeUSD.plus(trackedAmountUSD)
+  hyperswapDayData.dailyVolumeFTM = hyperswapDayData.dailyVolumeFTM.plus(trackedAmountFTM)
+  hyperswapDayData.dailyVolumeUntracked = hyperswapDayData.dailyVolumeUntracked.plus(derivedAmountUSD)
+  hyperswapDayData.save()
 
   // swap specific updating for pair
   let pairDayData = PairDayData.load(dayPairID)
@@ -532,9 +532,9 @@ export function handleSwap(event: Swap): void {
     .concat(BigInt.fromI32(dayID).toString())
   let token0DayData = TokenDayData.load(token0DayID)
   token0DayData.dailyVolumeToken = token0DayData.dailyVolumeToken.plus(amount0Total)
-  token0DayData.dailyVolumeBNB = token0DayData.dailyVolumeBNB.plus(amount0Total.times(token1.derivedBNB as BigDecimal))
+  token0DayData.dailyVolumeFTM = token0DayData.dailyVolumeFTM.plus(amount0Total.times(token1.derivedFTM as BigDecimal))
   token0DayData.dailyVolumeUSD = token0DayData.dailyVolumeUSD.plus(
-    amount0Total.times(token0.derivedBNB as BigDecimal).times(bundle.bnbPrice)
+    amount0Total.times(token0.derivedFTM as BigDecimal).times(bundle.bnbPrice)
   )
   token0DayData.save()
 
@@ -546,9 +546,9 @@ export function handleSwap(event: Swap): void {
   let token1DayData = TokenDayData.load(token1DayID)
   token1DayData = TokenDayData.load(token1DayID)
   token1DayData.dailyVolumeToken = token1DayData.dailyVolumeToken.plus(amount1Total)
-  token1DayData.dailyVolumeBNB = token1DayData.dailyVolumeBNB.plus(amount1Total.times(token1.derivedBNB as BigDecimal))
+  token1DayData.dailyVolumeFTM = token1DayData.dailyVolumeFTM.plus(amount1Total.times(token1.derivedFTM as BigDecimal))
   token1DayData.dailyVolumeUSD = token1DayData.dailyVolumeUSD.plus(
-    amount1Total.times(token1.derivedBNB as BigDecimal).times(bundle.bnbPrice)
+    amount1Total.times(token1.derivedFTM as BigDecimal).times(bundle.bnbPrice)
   )
   token1DayData.save()
 }

@@ -1,5 +1,5 @@
 specVersion: 0.0.2
-description: Thugswap is a decentralized protocol for automated token exchange on Binance Smart Chain.
+description: Hyperswap is a decentralized protocol for automated token exchange on Binance Smart Chain.
 repository: https://github.com/theothug/swap-subgraph
 schema:
   file: ./schema.graphql
@@ -8,9 +8,9 @@ dataSources:
     name: Factory
     network: mainnet
     source:
-      address: '0xaC653cE27E04C6ac565FD87F18128aD33ca03Ba2'
+      address: '0x991152411A7B5A14A8CF0cDDE8439435328070dF'
       abi: Factory
-      startBlock: 2093700
+      startBlock: 3812189
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.3

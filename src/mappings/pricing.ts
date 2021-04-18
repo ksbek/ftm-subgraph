@@ -3,37 +3,26 @@ import { Pair, Token, Bundle } from '../types/schema'
 import { BigDecimal, Address, BigInt } from '@graphprotocol/graph-ts/index'
 import { ZERO_BD, factoryContract, ADDRESS_ZERO, ONE_BD } from './helpers'
 
-const WBNB_ADDRESS = '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c'
-const BUSD_WBNB_PAIR = '0xf2e4e3f9b58b3edac88ad11d689a23f3119a782d'
-const DAI_WBNB_PAIR = '0xed8ecb790be568461d85cf82c386e51124e46a52' 
-const USDT_WBNB_PAIR = '0x0d29724d1834fc65869812bae5d63dce8acb7921' // created block 10093341
+const WFTM_ADDRESS = '0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83'
+const USDC_WFTM_PAIR = '0x50cc648e45b84d68405ba0707e94c507b08e593d'
+const DAI_WFTM_PAIR = '0x6d898d98818e670c695e374ed77cd1753cf109dd' 
+const USDT_WFTM_PAIR = '0x0d29724d1834fc65869812bae5d63dce8acb7921' // created block 10093341
 
 // dummy for testing
-export function getBnbPriceInUSD(): BigDecimal {
-  // fetch BNB prices for each stablecoin
-  let usdtPair = Pair.load(USDT_WBNB_PAIR) // usdt is token0
-  let busdPair = Pair.load(BUSD_WBNB_PAIR) // busd is token1
-  let daiPair = Pair.load(DAI_WBNB_PAIR) // dai is token0
+export function getFtmPriceInUSD(): BigDecimal {
+  // fetch FTM prices for each stablecoin
+  let usdcPair = Pair.load(USDC_WFTM_PAIR) // usdc is token1
+  let daiPair = Pair.load(DAI_WFTM_PAIR) // dai is token0
 
-  // all 3 have been created
-  if (daiPair !== null && busdPair !== null && usdtPair !== null) {
-    let totalLiquidityBNB = daiPair.reserve1.plus(busdPair.reserve0).plus(usdtPair.reserve1)
-    let daiWeight = daiPair.reserve1.div(totalLiquidityBNB)
-    let busdWeight = busdPair.reserve0.div(totalLiquidityBNB)
-    let usdtWeight = usdtPair.reserve1.div(totalLiquidityBNB)
-    return daiPair.token0Price
-      .times(daiWeight)
-      .plus(busdPair.token1Price.times(busdWeight))
-      .plus(usdtPair.token0Price.times(usdtWeight))
-    // busd and usdt have been created
-  } else if (busdPair !== null && usdtPair !== null) {
-    let totalLiquidityBNB = busdPair.reserve0.plus(usdtPair.reserve1)
-    let busdWeight = busdPair.reserve0.div(totalLiquidityBNB)
-    let usdtWeight = usdtPair.reserve1.div(totalLiquidityBNB)
-    return busdPair.token1Price.times(busdWeight).plus(usdtPair.token0Price.times(usdtWeight))
-    // usdt is the only pair so far
-  } else if (usdtPair !== null) {
-    return usdtPair.token0Price
+    // usdc and dai have been created
+  } else if (usdcPair !== null && daiPair !== null) {
+    let totalLiquidityFTM = usdcPair.reserve0.plus(daiPair.reserve1)
+    let usdcWeight = usdcPair.reserve0.div(totalLiquidityFTM)
+    let daiWeight = daiPair.reserve1.div(totalLiquidityFTM)
+    return usdcPair.token1Price.times(usdcWeight).plus(daiPair.token0Price.times(daiWeight))
+    // usdc is the only pair so far
+  } else if (usdcPair !== null) {
+    return usdcPair.token0Price
   } else {
     return ZERO_BD
   }
@@ -41,21 +30,17 @@ export function getBnbPriceInUSD(): BigDecimal {
 
 // token where amounts should contribute to tracked volume and liquidity
 let WHITELIST: string[] = [
-  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c', // WBNB
-  '0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3', // DAI
-  '0xe9e7cea3dedca5984780bafc599bd69add087d56', // BUSD
-  '0x55d398326f99059ff775485246999027b3197955', // USDT
-  '0x03d6bd3d48f956d783456695698c407a46ecd54d', // HYPR
-  '0x339550404ca4d831d12b1b2e4768869997390010', // DRUGS
-  '0x5ef5994fa33ff4eb6c82d51ee1dc145c546065bd'  // ALLOY
+  '0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83', // WFTM
+  '0x8d11ec38a3eb5e956b052f67da8bdc9bef8abf3e', // DAI
+  '0x04068da6c83afcfa0e13ba15a6696662335d5b75' // ALLOY
 ]
 
 /**
- * Search through graph to find derived BNB per token.
- * @todo update to be derived BNB (add stablecoin estimates)
+ * Search through graph to find derived FTM per token.
+ * @todo update to be derived FTM (add stablecoin estimates)
  **/
-export function findBnbPerToken(token: Token): BigDecimal {
-  if (token.id == WBNB_ADDRESS) {
+export function findFtmPerToken(token: Token): BigDecimal {
+  if (token.id == WFTM_ADDRESS) {
     return ONE_BD
   }
   // loop through whitelist and check if paired with any
@@ -65,11 +50,11 @@ export function findBnbPerToken(token: Token): BigDecimal {
       let pair = Pair.load(pairAddress.toHexString())
       if (pair.token0 == token.id) {
         let token1 = Token.load(pair.token1)
-        return pair.token1Price.times(token1.derivedBNB as BigDecimal) // return token1 per our token * BNB per token 1
+        return pair.token1Price.times(token1.derivedFTM as BigDecimal) // return token1 per our token * FTM per token 1
       }
       if (pair.token1 == token.id) {
         let token0 = Token.load(pair.token0)
-        return pair.token0Price.times(token0.derivedBNB as BigDecimal) // return token0 per our token * BNB per token 0
+        return pair.token0Price.times(token0.derivedFTM as BigDecimal) // return token0 per our token * FTM per token 0
       }
     }
   }
@@ -90,8 +75,8 @@ export function getTrackedVolumeUSD(
   pair: Pair
 ): BigDecimal {
   let bundle = Bundle.load('1')
-  let price0 = token0.derivedBNB.times(bundle.bnbPrice)
-  let price1 = token1.derivedBNB.times(bundle.bnbPrice)
+  let price0 = token0.derivedFTM.times(bundle.bnbPrice)
+  let price1 = token1.derivedFTM.times(bundle.bnbPrice)
 
   // if less than 5 LPs, require high minimum reserve amount amount or return 0
   if (pair.liquidityProviderCount.lt(BigInt.fromI32(5))) {
@@ -134,8 +119,8 @@ export function getTrackedLiquidityUSD(
   token1: Token
 ): BigDecimal {
   let bundle = Bundle.load('1')
-  let price0 = token0.derivedBNB.times(bundle.bnbPrice)
-  let price1 = token1.derivedBNB.times(bundle.bnbPrice)
+  let price0 = token0.derivedFTM.times(bundle.bnbPrice)
+  let price1 = token1.derivedFTM.times(bundle.bnbPrice)
 
   // both are whitelist tokens, take average of both amounts
   if (WHITELIST.includes(token0.id) && WHITELIST.includes(token1.id)) {

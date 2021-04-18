@@ -1,39 +1,39 @@
 import { PairHourData } from './../types/schema'
 /* eslint-disable prefer-const */
 import { BigInt, BigDecimal, EthereumEvent } from '@graphprotocol/graph-ts'
-import { Pair, Bundle, Token, ThugswapFactory, ThugswapDayData, PairDayData, TokenDayData } from '../types/schema'
+import { Pair, Bundle, Token, HyperswapFactory, HyperswapDayData, PairDayData, TokenDayData } from '../types/schema'
 import { ONE_BI, ZERO_BD, ZERO_BI, FACTORY_ADDRESS } from './helpers'
 
 // max number of entities to store
 const maxTokenDayDatas = 10
 const maxPairDayDatas = 10
 
-export function updateThugswapDayData(event: EthereumEvent): void {
-  let thugswap = ThugswapFactory.load(FACTORY_ADDRESS)
+export function updateHyperswapDayData(event: EthereumEvent): void {
+  let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
   let dayStartTimestamp = dayID * 86400
-  let thugswapDayData = ThugswapDayData.load(dayID.toString())
-  if (thugswapDayData == null) {
-    let thugswapDayData = new ThugswapDayData(dayID.toString())
-    thugswapDayData.date = dayStartTimestamp
-    thugswapDayData.dailyVolumeUSD = ZERO_BD
-    thugswapDayData.dailyVolumeBNB = ZERO_BD
-    thugswapDayData.totalVolumeUSD = ZERO_BD
-    thugswapDayData.totalVolumeBNB = ZERO_BD
-    thugswapDayData.dailyVolumeUntracked = ZERO_BD
-    thugswapDayData.totalLiquidityUSD = ZERO_BD
-    thugswapDayData.totalLiquidityBNB = ZERO_BD
-    thugswapDayData.maxStored = maxTokenDayDatas
-    thugswapDayData.mostLiquidTokens = thugswap.mostLiquidTokens
-    thugswapDayData.txCount = ZERO_BI
-    thugswapDayData.save()
+  let hyperswapDayData = HyperswapDayData.load(dayID.toString())
+  if (hyperswapDayData == null) {
+    let hyperswapDayData = new HyperswapDayData(dayID.toString())
+    hyperswapDayData.date = dayStartTimestamp
+    hyperswapDayData.dailyVolumeUSD = ZERO_BD
+    hyperswapDayData.dailyVolumeFTM = ZERO_BD
+    hyperswapDayData.totalVolumeUSD = ZERO_BD
+    hyperswapDayData.totalVolumeFTM = ZERO_BD
+    hyperswapDayData.dailyVolumeUntracked = ZERO_BD
+    hyperswapDayData.totalLiquidityUSD = ZERO_BD
+    hyperswapDayData.totalLiquidityFTM = ZERO_BD
+    hyperswapDayData.maxStored = maxTokenDayDatas
+    hyperswapDayData.mostLiquidTokens = hyperswap.mostLiquidTokens
+    hyperswapDayData.txCount = ZERO_BI
+    hyperswapDayData.save()
   }
-  thugswapDayData = ThugswapDayData.load(dayID.toString())
-  thugswapDayData.totalLiquidityUSD = thugswap.totalLiquidityUSD
-  thugswapDayData.totalLiquidityBNB = thugswap.totalLiquidityBNB
-  thugswapDayData.txCount = thugswap.txCount
-  thugswapDayData.save()
+  hyperswapDayData = HyperswapDayData.load(dayID.toString())
+  hyperswapDayData.totalLiquidityUSD = hyperswap.totalLiquidityUSD
+  hyperswapDayData.totalLiquidityFTM = hyperswap.totalLiquidityFTM
+  hyperswapDayData.txCount = hyperswap.txCount
+  hyperswapDayData.save()
 }
 
 export function updatePairDayData(event: EthereumEvent): void {
@@ -118,23 +118,23 @@ export function updateTokenDayData(token: Token, event: EthereumEvent): void {
     let tokenDayData = new TokenDayData(tokenDayID)
     tokenDayData.date = dayStartTimestamp
     tokenDayData.token = token.id
-    tokenDayData.priceUSD = token.derivedBNB.times(bundle.bnbPrice)
+    tokenDayData.priceUSD = token.derivedFTM.times(bundle.bnbPrice)
     tokenDayData.dailyVolumeToken = ZERO_BD
-    tokenDayData.dailyVolumeBNB = ZERO_BD
+    tokenDayData.dailyVolumeFTM = ZERO_BD
     tokenDayData.dailyVolumeUSD = ZERO_BD
     tokenDayData.dailyTxns = ZERO_BI
     tokenDayData.totalLiquidityToken = ZERO_BD
-    tokenDayData.totalLiquidityBNB = ZERO_BD
+    tokenDayData.totalLiquidityFTM = ZERO_BD
     tokenDayData.totalLiquidityUSD = ZERO_BD
     tokenDayData.maxStored = maxPairDayDatas
     tokenDayData.mostLiquidPairs = token.mostLiquidPairs
     tokenDayData.save()
   }
   tokenDayData = TokenDayData.load(tokenDayID)
-  tokenDayData.priceUSD = token.derivedBNB.times(bundle.bnbPrice)
+  tokenDayData.priceUSD = token.derivedFTM.times(bundle.bnbPrice)
   tokenDayData.totalLiquidityToken = token.totalLiquidity
-  tokenDayData.totalLiquidityBNB = token.totalLiquidity.times(token.derivedBNB as BigDecimal)
-  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityBNB.times(bundle.bnbPrice)
+  tokenDayData.totalLiquidityFTM = token.totalLiquidity.times(token.derivedFTM as BigDecimal)
+  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityFTM.times(bundle.bnbPrice)
   tokenDayData.dailyTxns = tokenDayData.dailyTxns.plus(ONE_BI)
   tokenDayData.save()
 
