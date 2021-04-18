@@ -75,8 +75,8 @@ export function getTrackedVolumeUSD(
   pair: Pair
 ): BigDecimal {
   let bundle = Bundle.load('1')
-  let price0 = token0.derivedFTM.times(bundle.bnbPrice)
-  let price1 = token1.derivedFTM.times(bundle.bnbPrice)
+  let price0 = token0.derivedFTM.times(bundle.ftmPrice)
+  let price1 = token1.derivedFTM.times(bundle.ftmPrice)
 
   // if less than 5 LPs, require high minimum reserve amount amount or return 0
   if (pair.liquidityProviderCount.lt(BigInt.fromI32(5))) {
@@ -119,8 +119,8 @@ export function getTrackedLiquidityUSD(
   token1: Token
 ): BigDecimal {
   let bundle = Bundle.load('1')
-  let price0 = token0.derivedFTM.times(bundle.bnbPrice)
-  let price1 = token1.derivedFTM.times(bundle.bnbPrice)
+  let price0 = token0.derivedFTM.times(bundle.ftmPrice)
+  let price1 = token1.derivedFTM.times(bundle.ftmPrice)
 
   // both are whitelist tokens, take average of both amounts
   if (WHITELIST.includes(token0.id) && WHITELIST.includes(token1.id)) {

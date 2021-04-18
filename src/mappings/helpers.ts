@@ -29,8 +29,8 @@ export function bigDecimalExp18(): BigDecimal {
   return BigDecimal.fromString('1000000000000000000')
 }
 
-export function convertFtmToDecimal(bnb: BigInt): BigDecimal {
-  return bnb.toBigDecimal().div(exponentToBigDecimal(18))
+export function convertFtmToDecimal(ftm: BigInt): BigDecimal {
+  return ftm.toBigDecimal().div(exponentToBigDecimal(18))
 }
 
 export function convertTokenToDecimal(tokenAmount: BigInt, exchangeDecimals: BigInt): BigDecimal {
@@ -166,8 +166,8 @@ export function createLiquiditySnapshot(position: LiquidityPosition, event: Ethe
   snapshot.block = event.block.number.toI32()
   snapshot.user = position.user
   snapshot.pair = position.pair
-  snapshot.token0PriceUSD = token0.derivedFTM.times(bundle.bnbPrice)
-  snapshot.token1PriceUSD = token1.derivedFTM.times(bundle.bnbPrice)
+  snapshot.token0PriceUSD = token0.derivedFTM.times(bundle.ftmPrice)
+  snapshot.token1PriceUSD = token1.derivedFTM.times(bundle.ftmPrice)
   snapshot.reserve0 = pair.reserve0
   snapshot.reserve1 = pair.reserve1
   snapshot.reserveUSD = pair.reserveUSD

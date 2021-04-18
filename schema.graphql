@@ -201,7 +201,7 @@ type Swap @entity {
 # stores for USD calculations
 type Bundle @entity {
   id: ID!
-  bnbPrice: BigDecimal! # price of FTM usd
+  ftmPrice: BigDecimal! # price of FTM usd
 }
 
 # Data accumulated and condensed into day stats for all of Hyperswap

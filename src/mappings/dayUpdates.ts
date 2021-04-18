@@ -118,7 +118,7 @@ export function updateTokenDayData(token: Token, event: EthereumEvent): void {
     let tokenDayData = new TokenDayData(tokenDayID)
     tokenDayData.date = dayStartTimestamp
     tokenDayData.token = token.id
-    tokenDayData.priceUSD = token.derivedFTM.times(bundle.bnbPrice)
+    tokenDayData.priceUSD = token.derivedFTM.times(bundle.ftmPrice)
     tokenDayData.dailyVolumeToken = ZERO_BD
     tokenDayData.dailyVolumeFTM = ZERO_BD
     tokenDayData.dailyVolumeUSD = ZERO_BD
@@ -131,10 +131,10 @@ export function updateTokenDayData(token: Token, event: EthereumEvent): void {
     tokenDayData.save()
   }
   tokenDayData = TokenDayData.load(tokenDayID)
-  tokenDayData.priceUSD = token.derivedFTM.times(bundle.bnbPrice)
+  tokenDayData.priceUSD = token.derivedFTM.times(bundle.ftmPrice)
   tokenDayData.totalLiquidityToken = token.totalLiquidity
   tokenDayData.totalLiquidityFTM = token.totalLiquidity.times(token.derivedFTM as BigDecimal)
-  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityFTM.times(bundle.bnbPrice)
+  tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityFTM.times(bundle.ftmPrice)
   tokenDayData.dailyTxns = tokenDayData.dailyTxns.plus(ONE_BI)
   tokenDayData.save()
 

@@ -226,7 +226,7 @@ export function handleSync(event: Sync): void {
 
   // update FTM price now that reserves could have changed
   let bundle = Bundle.load('1')
-  bundle.bnbPrice = getFtmPriceInUSD()
+  bundle.ftmPrice = getFtmPriceInUSD()
   bundle.save()
 
   token0.derivedFTM = findFtmPerToken(token0 as Token)
@@ -236,9 +236,9 @@ export function handleSync(event: Sync): void {
 
   // get tracked liquidity - will be 0 if neither is in whitelist
   let trackedLiquidityFTM: BigDecimal
-  if (bundle.bnbPrice.notEqual(ZERO_BD)) {
+  if (bundle.ftmPrice.notEqual(ZERO_BD)) {
     trackedLiquidityFTM = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
-      bundle.bnbPrice
+      bundle.ftmPrice
     )
   } else {
     trackedLiquidityFTM = ZERO_BD
@@ -249,11 +249,11 @@ export function handleSync(event: Sync): void {
   pair.reserveFTM = pair.reserve0
     .times(token0.derivedFTM as BigDecimal)
     .plus(pair.reserve1.times(token1.derivedFTM as BigDecimal))
-  pair.reserveUSD = pair.reserveFTM.times(bundle.bnbPrice)
+  pair.reserveUSD = pair.reserveFTM.times(bundle.ftmPrice)
 
   // use tracked amounts globally
   hyperswap.totalLiquidityFTM = hyperswap.totalLiquidityFTM.plus(trackedLiquidityFTM)
-  hyperswap.totalLiquidityUSD = hyperswap.totalLiquidityFTM.times(bundle.bnbPrice)
+  hyperswap.totalLiquidityUSD = hyperswap.totalLiquidityFTM.times(bundle.ftmPrice)
 
   // now correctly set liquidity amounts for each token
   token0.totalLiquidity = token0.totalLiquidity.plus(pair.reserve0)
@@ -290,7 +290,7 @@ export function handleMint(event: Mint): void {
   let amountTotalUSD = token1.derivedFTM
     .times(token1Amount)
     .plus(token0.derivedFTM.times(token0Amount))
-    .times(bundle.bnbPrice)
+    .times(bundle.ftmPrice)
 
   // update txn counts
   pair.txCount = pair.txCount.plus(ONE_BI)
@@ -344,7 +344,7 @@ export function handleBurn(event: Burn): void {
   let amountTotalUSD = token1.derivedFTM
     .times(token1Amount)
     .plus(token0.derivedFTM.times(token0Amount))
-    .times(bundle.bnbPrice)
+    .times(bundle.ftmPrice)
 
   // update txn counts
   hyperswap.txCount = hyperswap.txCount.plus(ONE_BI)
@@ -398,16 +398,16 @@ export function handleSwap(event: Swap): void {
     .times(amount1Total)
     .plus(token0.derivedFTM.times(amount0Total))
     .div(BigDecimal.fromString('2'))
-  let derivedAmountUSD = derivedAmountFTM.times(bundle.bnbPrice)
+  let derivedAmountUSD = derivedAmountFTM.times(bundle.ftmPrice)
 
   // only accounts for volume through white listed tokens
   let trackedAmountUSD = getTrackedVolumeUSD(amount0Total, token0 as Token, amount1Total, token1 as Token, pair as Pair)
 
   let trackedAmountFTM: BigDecimal
-  if (bundle.bnbPrice.equals(ZERO_BD)) {
+  if (bundle.ftmPrice.equals(ZERO_BD)) {
     trackedAmountFTM = ZERO_BD
   } else {
-    trackedAmountFTM = trackedAmountUSD.div(bundle.bnbPrice)
+    trackedAmountFTM = trackedAmountUSD.div(bundle.ftmPrice)
   }
 
   // update token0 global volume and token liquidity stats
@@ -534,7 +534,7 @@ export function handleSwap(event: Swap): void {
   token0DayData.dailyVolumeToken = token0DayData.dailyVolumeToken.plus(amount0Total)
   token0DayData.dailyVolumeFTM = token0DayData.dailyVolumeFTM.plus(amount0Total.times(token1.derivedFTM as BigDecimal))
   token0DayData.dailyVolumeUSD = token0DayData.dailyVolumeUSD.plus(
-    amount0Total.times(token0.derivedFTM as BigDecimal).times(bundle.bnbPrice)
+    amount0Total.times(token0.derivedFTM as BigDecimal).times(bundle.ftmPrice)
   )
   token0DayData.save()
 
@@ -548,7 +548,7 @@ export function handleSwap(event: Swap): void {
   token1DayData.dailyVolumeToken = token1DayData.dailyVolumeToken.plus(amount1Total)
   token1DayData.dailyVolumeFTM = token1DayData.dailyVolumeFTM.plus(amount1Total.times(token1.derivedFTM as BigDecimal))
   token1DayData.dailyVolumeUSD = token1DayData.dailyVolumeUSD.plus(
-    amount1Total.times(token1.derivedFTM as BigDecimal).times(bundle.bnbPrice)
+    amount1Total.times(token1.derivedFTM as BigDecimal).times(bundle.ftmPrice)
   )
   token1DayData.save()
 }
