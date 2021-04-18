@@ -15,7 +15,7 @@ export function getFtmPriceInUSD(): BigDecimal {
   let daiPair = Pair.load(DAI_WFTM_PAIR) // dai is token0
 
     // usdc and dai have been created
-  } else if (usdcPair !== null && daiPair !== null) {
+  if (usdcPair !== null && daiPair !== null) {
     let totalLiquidityFTM = usdcPair.reserve0.plus(daiPair.reserve1)
     let usdcWeight = usdcPair.reserve0.div(totalLiquidityFTM)
     let daiWeight = daiPair.reserve1.div(totalLiquidityFTM)
