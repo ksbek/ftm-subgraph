@@ -11,15 +11,15 @@ const USDT_WFTM_PAIR = '0x0d29724d1834fc65869812bae5d63dce8acb7921' // created b
 // dummy for testing
 export function getFtmPriceInUSD(): BigDecimal {
   // fetch FTM prices for each stablecoin
-  let usdcPair = Pair.load(USDC_WFTM_PAIR) // usdc is token1
-  let daiPair = Pair.load(DAI_WFTM_PAIR) // dai is token0
+  let usdcPair = Pair.load(USDC_WFTM_PAIR) // usdc is token0
+  let daiPair = Pair.load(DAI_WFTM_PAIR) // dai is token1
 
     // usdc and dai have been created
   if (usdcPair !== null && daiPair !== null) {
-    let totalLiquidityFTM = usdcPair.reserve0.plus(daiPair.reserve1)
-    let usdcWeight = usdcPair.reserve0.div(totalLiquidityFTM)
-    let daiWeight = daiPair.reserve1.div(totalLiquidityFTM)
-    return usdcPair.token1Price.times(usdcWeight).plus(daiPair.token0Price.times(daiWeight))
+    let totalLiquidityFTM = usdcPair.reserve1.plus(daiPair.reserve0)
+    let usdcWeight = usdcPair.reserve1.div(totalLiquidityFTM)
+    let daiWeight = daiPair.reserve0.div(totalLiquidityFTM)
+    return usdcPair.token0Price.times(usdcWeight).plus(daiPair.token1Price.times(daiWeight))
     // usdc is the only pair so far
   } else if (usdcPair !== null) {
     return usdcPair.token0Price
