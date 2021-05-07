@@ -6,7 +6,6 @@ import { ZERO_BD, factoryContract, ADDRESS_ZERO, ONE_BD } from './helpers'
 const WFTM_ADDRESS = '0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83'
 const USDC_WFTM_PAIR = '0x50cc648e45b84d68405ba0707e94c507b08e593d'
 const DAI_WFTM_PAIR = '0x6d898d98818e670c695e374ed77cd1753cf109dd' 
-const USDT_WFTM_PAIR = '0x0d29724d1834fc65869812bae5d63dce8acb7921' // created block 10093341
 
 // dummy for testing
 export function getFtmPriceInUSD(): BigDecimal {
@@ -32,7 +31,9 @@ export function getFtmPriceInUSD(): BigDecimal {
 let WHITELIST: string[] = [
   '0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83', // WFTM
   '0x8d11ec38a3eb5e956b052f67da8bdc9bef8abf3e', // DAI
-  '0x04068da6c83afcfa0e13ba15a6696662335d5b75' // ALLOY
+  '0x0575f8738efda7f512e3654f277c77e80c7d2725', // ORI
+  '0x04068da6c83afcfa0e13ba15a6696662335d5b75', // USDC
+  '0xbc2451aad349b6b43fd05f4f0cc327f8a6bca2d4'
 ]
 
 /**
