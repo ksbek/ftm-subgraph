@@ -1,5 +1,5 @@
 /* eslint-disable prefer-const */
-import { log, BigInt, BigDecimal, Address, ethereum } from '@graphprotocol/graph-ts'
+import { log, BigInt, BigDecimal, Address, ethereum, Bytes } from '@graphprotocol/graph-ts'
 import { ERC20 } from '../types/Factory/ERC20'
 import { ERC20SymbolBytes } from '../types/Factory/ERC20SymbolBytes'
 import { ERC20NameBytes } from '../types/Factory/ERC20NameBytes'
@@ -103,6 +103,7 @@ export function fetchTokenName(tokenAddress: Address): string {
   return nameValue
 }
 
+/*
 export function fetchTokenTotalSupply(tokenAddress: Address): BigInt {
   let contract = ERC20.bind(tokenAddress)
   let totalSupplyValue = null
@@ -111,6 +112,15 @@ export function fetchTokenTotalSupply(tokenAddress: Address): BigInt {
     totalSupplyValue = totalSupplyResult.value.toI32()
   }
   return BigInt.fromI32(totalSupplyValue)
+}*/
+
+export function fetchTokenTotalSupply(tokenAddress: Address): BigInt {
+  let contract = ERC20.bind(tokenAddress) 
+  let totalSupplyResult = contract.try_totalSupply()
+  if (!totalSupplyResult.reverted) {
+    return totalSupplyResult.value
+  }
+  return BigInt.fromI32(0)
 }
 
 export function fetchTokenDecimals(tokenAddress: Address): BigInt {
@@ -124,7 +134,7 @@ export function fetchTokenDecimals(tokenAddress: Address): BigInt {
   return BigInt.fromI32(decimalValue)
 }
 
-export function createLiquidityPosition(exchange: Address, user: Address): LiquidityPosition {
+export function createLiquidityPosition(exchange: Address, user: Bytes): LiquidityPosition {
   let id = exchange
     .toHexString()
     .concat('-')
