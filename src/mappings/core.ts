@@ -30,7 +30,11 @@ import {
 } from './helpers'
 
 function isCompleteMint(mintId: string): boolean {
-  return MintEvent.load(mintId).sender !== null // sufficient checks
+  let mintEvent = MintEvent.load(mintId);
+  if (!mintEvent) {
+    return false
+  }
+  return mintEvent.sender !== null // sufficient checks
 }
 
 export function handleTransfer(event: Transfer): void {
@@ -40,6 +44,9 @@ export function handleTransfer(event: Transfer): void {
   }
 
   let factory = HyperswapFactory.load(FACTORY_ADDRESS)
+  if (!factory) {
+    return
+  }
   let transactionHash = event.transaction.hash.toHexString()
 
   // user stats
@@ -49,6 +56,9 @@ export function handleTransfer(event: Transfer): void {
   createUser(to)
 
   let pair = Pair.load(event.address.toHexString())
+  if (!pair) {
+    return
+  }
   let pairContract = PairContract.bind(event.address)
 
   // liquidity token amount being transfered
@@ -66,6 +76,9 @@ export function handleTransfer(event: Transfer): void {
 
   // load mints from transaction
   let mints = transaction.mints
+  if (!mints) {
+    return
+  }
 
   // mint
   if (from.toHexString() == ADDRESS_ZERO) {
@@ -88,8 +101,10 @@ export function handleTransfer(event: Transfer): void {
 
       // update mints in transaction
       let newMints = transaction.mints
-      newMints.push(mint.id)
-      transaction.mints = newMints
+      if (newMints) {
+        newMints.push(mint.id)
+        transaction.mints = newMints
+      }
 
       // save entities
       transaction.save()
@@ -100,22 +115,24 @@ export function handleTransfer(event: Transfer): void {
   // case where direct send first on Ftm withdrawls
   if (event.params.to.toHexString() == pair.id) {
     let burns = transaction.burns
-    let burn = new BurnEvent(
-      event.transaction.hash
-        .toHexString()
-        .concat('-')
-        .concat(BigInt.fromI32(burns.length).toString())
-    )
-    burn.pair = pair.id
-    burn.liquidity = value
-    burn.timestamp = transaction.timestamp
-    burn.to = event.params.to
-    burn.sender = event.params.from
-    burn.needsComplete = true
-    burn.save()
-    burns.push(burn.id)
-    transaction.burns = burns
-    transaction.save()
+    if (burns) {
+      let burn = new BurnEvent(
+        event.transaction.hash
+          .toHexString()
+          .concat('-')
+          .concat(BigInt.fromI32(burns.length).toString())
+      )
+      burn.pair = pair.id
+      burn.liquidity = value
+      burn.timestamp = transaction.timestamp
+      burn.to = event.params.to
+      burn.sender = event.params.from
+      burn.needsComplete = true
+      burn.save()
+      burns.push(burn.id)
+      transaction.burns = burns
+      transaction.save()
+    }
   }
 
   // burn
@@ -126,10 +143,23 @@ export function handleTransfer(event: Transfer): void {
     // this is a new instance of a logical burn
     let burns = transaction.burns
     let burn: BurnEvent
-    if (burns.length > 0) {
+    if (burns && burns.length > 0) {
       let currentBurn = BurnEvent.load(burns[burns.length - 1])
-      if (currentBurn.needsComplete) {
-        burn = currentBurn as BurnEvent
+      if (currentBurn) {
+        if (currentBurn.needsComplete) {
+          burn = currentBurn as BurnEvent
+        } else {
+          burn = new BurnEvent(
+            event.transaction.hash
+              .toHexString()
+              .concat('-')
+              .concat(BigInt.fromI32(burns.length).toString())
+          )
+          burn.needsComplete = false
+          burn.pair = pair.id
+          burn.liquidity = value
+          burn.timestamp = transaction.timestamp
+        }
       } else {
         burn = new BurnEvent(
           event.transaction.hash
@@ -137,47 +167,39 @@ export function handleTransfer(event: Transfer): void {
             .concat('-')
             .concat(BigInt.fromI32(burns.length).toString())
         )
-        burn.needsComplete = false
-        burn.pair = pair.id
-        burn.liquidity = value
-        burn.timestamp = transaction.timestamp
+        if (burn) {
+          burn.needsComplete = false
+          burn.pair = pair.id
+          burn.liquidity = value
+          burn.timestamp = transaction.timestamp
+        }
       }
-    } else {
-      burn = new BurnEvent(
-        event.transaction.hash
-          .toHexString()
-          .concat('-')
-          .concat(BigInt.fromI32(burns.length).toString())
-      )
-      burn.needsComplete = false
-      burn.pair = pair.id
-      burn.liquidity = value
-      burn.timestamp = transaction.timestamp
-    }
-
-    // if this logical burn included a fee mint, account for this
-    if (mints.length !== 0 && !isCompleteMint(mints[mints.length - 1])) {
-      let mint = MintEvent.load(mints[mints.length - 1])
-      burn.feeTo = mint.to
-      burn.feeLiquidity = mint.liquidity
-      // remove the logical mint
-      store.remove('Mint', mints[mints.length - 1])
-      // update the transaction
-      mints.pop()
-      transaction.mints = mints
+      // if this logical burn included a fee mint, account for this
+      if (mints.length !== 0 && !isCompleteMint(mints[mints.length - 1])) {
+        let mint = MintEvent.load(mints[mints.length - 1])
+        if (mint) {
+          burn.feeTo = mint.to
+          burn.feeLiquidity = mint.liquidity
+          // remove the logical mint
+          store.remove('Mint', mints[mints.length - 1])
+          // update the transaction
+          mints.pop()
+          transaction.mints = mints
+          transaction.save()
+        }
+      }
+      burn.save()
+      // if accessing last one, replace it
+      if (burn.needsComplete) {
+        burns[burns.length - 1] = burn.id
+      }
+      // else add new one
+      else {
+        burns.push(burn.id)
+      }
+      transaction.burns = burns
       transaction.save()
     }
-    burn.save()
-    // if accessing last one, replace it
-    if (burn.needsComplete) {
-      burns[burns.length - 1] = burn.id
-    }
-    // else add new one
-    else {
-      burns.push(burn.id)
-    }
-    transaction.burns = burns
-    transaction.save()
   }
 
   if (from.toHexString() != ADDRESS_ZERO && from.toHexString() != pair.id) {
@@ -199,9 +221,21 @@ export function handleTransfer(event: Transfer): void {
 
 export function handleSync(event: Sync): void {
   let pair = Pair.load(event.address.toHex())
+  if (!pair) {
+    return
+  }
   let token0 = Token.load(pair.token0)
+  if (!token0) {
+    return
+  }
   let token1 = Token.load(pair.token1)
+  if (!token1) {
+    return
+  }
   let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
+  if (!hyperswap) {
+    return
+  }
 
   // reset factory liquidity by subtracting onluy tarcked liquidity
   hyperswap.totalLiquidityFTM = hyperswap.totalLiquidityFTM.minus(pair.trackedReserveFTM as BigDecimal)
@@ -226,38 +260,40 @@ export function handleSync(event: Sync): void {
 
   // update FTM price now that reserves could have changed
   let bundle = Bundle.load('1')
-  bundle.ftmPrice = getFtmPriceInUSD()
-  bundle.save()
+  if (bundle) {
+    bundle.ftmPrice = getFtmPriceInUSD()
+    bundle.save()
 
-  token0.derivedFTM = findFtmPerToken(token0 as Token)
-  token1.derivedFTM = findFtmPerToken(token1 as Token)
-  token0.save()
-  token1.save()
+    token0.derivedFTM = findFtmPerToken(token0 as Token)
+    token1.derivedFTM = findFtmPerToken(token1 as Token)
+    token0.save()
+    token1.save()
 
-  // get tracked liquidity - will be 0 if neither is in whitelist
-  let trackedLiquidityFTM: BigDecimal
-  if (bundle.ftmPrice.notEqual(ZERO_BD)) {
-    trackedLiquidityFTM = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
-      bundle.ftmPrice
-    )
-  } else {
-    trackedLiquidityFTM = ZERO_BD
+    // get tracked liquidity - will be 0 if neither is in whitelist
+    let trackedLiquidityFTM: BigDecimal
+    if (bundle.ftmPrice.notEqual(ZERO_BD)) {
+      trackedLiquidityFTM = getTrackedLiquidityUSD(pair.reserve0, token0 as Token, pair.reserve1, token1 as Token).div(
+        bundle.ftmPrice
+      )
+    } else {
+      trackedLiquidityFTM = ZERO_BD
+    }
+
+    // use derived amounts within pair
+    pair.trackedReserveFTM = trackedLiquidityFTM
+    pair.reserveFTM = pair.reserve0
+      .times(token0.derivedFTM as BigDecimal)
+      .plus(pair.reserve1.times(token1.derivedFTM as BigDecimal))
+    pair.reserveUSD = pair.reserveFTM.times(bundle.ftmPrice)
+
+    // use tracked amounts globally
+    hyperswap.totalLiquidityFTM = hyperswap.totalLiquidityFTM.plus(trackedLiquidityFTM)
+    hyperswap.totalLiquidityUSD = hyperswap.totalLiquidityFTM.times(bundle.ftmPrice)
+
+    // now correctly set liquidity amounts for each token
+    token0.totalLiquidity = token0.totalLiquidity.plus(pair.reserve0)
+    token1.totalLiquidity = token1.totalLiquidity.plus(pair.reserve1)
   }
-
-  // use derived amounts within pair
-  pair.trackedReserveFTM = trackedLiquidityFTM
-  pair.reserveFTM = pair.reserve0
-    .times(token0.derivedFTM as BigDecimal)
-    .plus(pair.reserve1.times(token1.derivedFTM as BigDecimal))
-  pair.reserveUSD = pair.reserveFTM.times(bundle.ftmPrice)
-
-  // use tracked amounts globally
-  hyperswap.totalLiquidityFTM = hyperswap.totalLiquidityFTM.plus(trackedLiquidityFTM)
-  hyperswap.totalLiquidityUSD = hyperswap.totalLiquidityFTM.times(bundle.ftmPrice)
-
-  // now correctly set liquidity amounts for each token
-  token0.totalLiquidity = token0.totalLiquidity.plus(pair.reserve0)
-  token1.totalLiquidity = token1.totalLiquidity.plus(pair.reserve1)
 
   // save entities
   pair.save()
@@ -268,14 +304,35 @@ export function handleSync(event: Sync): void {
 
 export function handleMint(event: Mint): void {
   let transaction = Transaction.load(event.transaction.hash.toHexString())
+  if (!transaction) {
+    return;
+  }
   let mints = transaction.mints
+  if (!mints) {
+    return
+  }
   let mint = MintEvent.load(mints[mints.length - 1])
+  if (!mint) {
+    return;
+  }
 
   let pair = Pair.load(event.address.toHex())
+  if (!pair) {
+    return;
+  }
   let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
+  if (!hyperswap) {
+    return;
+  }
 
   let token0 = Token.load(pair.token0)
+  if (!token0) {
+    return;
+  }
   let token1 = Token.load(pair.token1)
+  if (!token1) {
+    return;
+  }
 
   // update exchange info (except balances, sync will cover that)
   let token0Amount = convertTokenToDecimal(event.params.amount0, token0.decimals)
@@ -287,10 +344,15 @@ export function handleMint(event: Mint): void {
 
   // get new amounts of USD and Ftm for tracking
   let bundle = Bundle.load('1')
-  let amountTotalUSD = token1.derivedFTM
-    .times(token1Amount)
-    .plus(token0.derivedFTM.times(token0Amount))
-    .times(bundle.ftmPrice)
+  let derivedFTM0 = token0.derivedFTM;
+  let derivedFTM1 = token1.derivedFTM;
+  if (bundle && derivedFTM0 && derivedFTM1) {
+    let amountTotalUSD = derivedFTM1
+      .times(token1Amount)
+      .plus(derivedFTM0.times(token0Amount))
+      .times(bundle.ftmPrice)
+    mint.amountUSD = amountTotalUSD as BigDecimal
+  }
 
   // update txn counts
   pair.txCount = pair.txCount.plus(ONE_BI)
@@ -306,7 +368,6 @@ export function handleMint(event: Mint): void {
   mint.amount0 = token0Amount as BigDecimal
   mint.amount1 = token1Amount as BigDecimal
   mint.logIndex = event.logIndex
-  mint.amountUSD = amountTotalUSD as BigDecimal
   mint.save()
 
   // update the LP position
@@ -323,15 +384,36 @@ export function handleMint(event: Mint): void {
 
 export function handleBurn(event: Burn): void {
   let transaction = Transaction.load(event.transaction.hash.toHexString())
+  if (!transaction) {
+    return;
+  }
   let burns = transaction.burns
+  if (!burns) {
+    return;
+  }
   let burn = BurnEvent.load(burns[burns.length - 1])
+  if (!burn) {
+    return;
+  }
 
   let pair = Pair.load(event.address.toHex())
+  if (!pair) {
+    return;
+  }
   let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
+  if (!hyperswap) {
+    return;
+  }
 
   //update token info
   let token0 = Token.load(pair.token0)
+  if (!token0) {
+    return;
+  }
   let token1 = Token.load(pair.token1)
+  if (!token1) {
+    return;
+  }
   let token0Amount = convertTokenToDecimal(event.params.amount0, token0.decimals)
   let token1Amount = convertTokenToDecimal(event.params.amount1, token1.decimals)
 
@@ -341,9 +423,20 @@ export function handleBurn(event: Burn): void {
 
   // get new amounts of USD and Ftm for tracking
   let bundle = Bundle.load('1')
-  let amountTotalUSD = token1.derivedFTM
+  if (!bundle) {
+    return;
+  }
+  let derivedFTM0 = token0.derivedFTM;
+  if (!derivedFTM0) {
+    return
+  }
+  let derivedFTM1 = token1.derivedFTM;
+  if (!derivedFTM1) {
+    return
+  }
+  let amountTotalUSD = derivedFTM1
     .times(token1Amount)
-    .plus(token0.derivedFTM.times(token0Amount))
+    .plus(derivedFTM0.times(token0Amount))
     .times(bundle.ftmPrice)
 
   // update txn counts
@@ -379,8 +472,17 @@ export function handleBurn(event: Burn): void {
 
 export function handleSwap(event: Swap): void {
   let pair = Pair.load(event.address.toHexString())
+  if (!pair) {
+    return;
+  }
   let token0 = Token.load(pair.token0)
+  if (!token0) {
+    return
+  }
   let token1 = Token.load(pair.token1)
+  if (!token1) {
+    return
+  }
   let amount0In = convertTokenToDecimal(event.params.amount0In, token0.decimals)
   let amount1In = convertTokenToDecimal(event.params.amount1In, token1.decimals)
   let amount0Out = convertTokenToDecimal(event.params.amount0Out, token0.decimals)
@@ -392,12 +494,26 @@ export function handleSwap(event: Swap): void {
 
   // Ftm/USD prices
   let bundle = Bundle.load('1')
+  if (!bundle) {
+    return
+  }
 
   // get total amounts of derived USD and Ftm for tracking
-  let derivedAmountFTM = token1.derivedFTM
+  let derivedFTM0 = token0.derivedFTM;
+  if (!derivedFTM0) {
+    return
+  }
+  let derivedFTM1 = token1.derivedFTM;
+  if (!derivedFTM1) {
+    return
+  }
+  let derivedAmountFTM = derivedFTM1
     .times(amount1Total)
-    .plus(token0.derivedFTM.times(amount0Total))
+    .plus(derivedFTM0.times(amount0Total))
     .div(BigDecimal.fromString('2'))
+  if (!derivedAmountFTM) {
+    return
+  }
   let derivedAmountUSD = derivedAmountFTM.times(bundle.ftmPrice)
 
   // only accounts for volume through white listed tokens
@@ -434,6 +550,9 @@ export function handleSwap(event: Swap): void {
 
   // update global values, only used tracked amounts for volume
   let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
+  if (!hyperswap) {
+    return;
+  }
   hyperswap.totalVolumeUSD = hyperswap.totalVolumeUSD.plus(trackedAmountUSD)
   hyperswap.totalVolumeFTM = hyperswap.totalVolumeFTM.plus(trackedAmountFTM)
   hyperswap.untrackedVolumeUSD = hyperswap.untrackedVolumeUSD.plus(derivedAmountUSD)
@@ -456,13 +575,18 @@ export function handleSwap(event: Swap): void {
     transaction.save()
   }
   let swaps = transaction.swaps
+  if (!swaps) {
+    return
+  }
   let swap = new SwapEvent(
     event.transaction.hash
       .toHexString()
       .concat('-')
       .concat(BigInt.fromI32(swaps.length).toString())
   )
-
+  if (!swap) {
+    return
+  }
   // update swap event
   swap.pair = pair.id
   swap.timestamp = transaction.timestamp
@@ -506,6 +630,9 @@ export function handleSwap(event: Swap): void {
 
   // swap specific updating
   let hyperswapDayData = HyperswapDayData.load(dayID.toString())
+  if (!hyperswapDayData) {
+    return;
+  }
   hyperswapDayData.dailyVolumeUSD = hyperswapDayData.dailyVolumeUSD.plus(trackedAmountUSD)
   hyperswapDayData.dailyVolumeFTM = hyperswapDayData.dailyVolumeFTM.plus(trackedAmountFTM)
   hyperswapDayData.dailyVolumeUntracked = hyperswapDayData.dailyVolumeUntracked.plus(derivedAmountUSD)
@@ -513,6 +640,9 @@ export function handleSwap(event: Swap): void {
 
   // swap specific updating for pair
   let pairDayData = PairDayData.load(dayPairID)
+  if (!pairDayData) {
+    return;
+  }
   pairDayData.dailyVolumeToken0 = pairDayData.dailyVolumeToken0.plus(amount0Total)
   pairDayData.dailyVolumeToken1 = pairDayData.dailyVolumeToken1.plus(amount1Total)
   pairDayData.dailyVolumeUSD = pairDayData.dailyVolumeUSD.plus(trackedAmountUSD)
@@ -520,6 +650,9 @@ export function handleSwap(event: Swap): void {
 
   // update hourly pair data
   let pairHourData = PairHourData.load(hourPairID)
+  if (!pairHourData) {
+    return;
+  }
   pairHourData.hourlyVolumeToken0 = pairHourData.hourlyVolumeToken0.plus(amount0Total)
   pairHourData.hourlyVolumeToken1 = pairHourData.hourlyVolumeToken1.plus(amount1Total)
   pairHourData.hourlyVolumeUSD = pairHourData.hourlyVolumeUSD.plus(trackedAmountUSD)
@@ -531,6 +664,9 @@ export function handleSwap(event: Swap): void {
     .concat('-')
     .concat(BigInt.fromI32(dayID).toString())
   let token0DayData = TokenDayData.load(token0DayID)
+  if (!token0DayData) {
+    return;
+  }
   token0DayData.dailyVolumeToken = token0DayData.dailyVolumeToken.plus(amount0Total)
   token0DayData.dailyVolumeFTM = token0DayData.dailyVolumeFTM.plus(amount0Total.times(token1.derivedFTM as BigDecimal))
   token0DayData.dailyVolumeUSD = token0DayData.dailyVolumeUSD.plus(
@@ -544,7 +680,10 @@ export function handleSwap(event: Swap): void {
     .concat('-')
     .concat(BigInt.fromI32(dayID).toString())
   let token1DayData = TokenDayData.load(token1DayID)
-  token1DayData = TokenDayData.load(token1DayID)
+  
+  if (!token1DayData) {
+    return;
+  }
   token1DayData.dailyVolumeToken = token1DayData.dailyVolumeToken.plus(amount1Total)
   token1DayData.dailyVolumeFTM = token1DayData.dailyVolumeFTM.plus(amount1Total.times(token1.derivedFTM as BigDecimal))
   token1DayData.dailyVolumeUSD = token1DayData.dailyVolumeUSD.plus(

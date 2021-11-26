@@ -50,7 +50,7 @@ type Token @entity {
   derivedFTM: BigDecimal
 
   # saved for historical refernce of most liquid pairs
-  mostLiquidPairs: [PairDayData]!
+  mostLiquidPairs: [PairDayData!]!
 }
 
 type Pair @entity {
@@ -98,7 +98,7 @@ type LiquidityPosition @entity {
   user: User!
   pair: Pair!
   liquidityTokenBalance: BigDecimal!
-  historicalSnapshots: [LiquidityPositionSnapshot]!
+  historicalSnapshots: [LiquidityPositionSnapshot!]!
 }
 
 # saved over time for return calculations, gets created and never updated
@@ -122,9 +122,9 @@ type Transaction @entity {
   id: ID! # txn hash
   blockNumber: BigInt!
   timestamp: BigInt!
-  mints: [Mint]!
-  burns: [Burn]!
-  swaps: [Swap]!
+  mints: [Mint!]!
+  burns: [Burn!]!
+  swaps: [Swap!]!
 }
 
 type Mint @entity {

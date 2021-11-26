@@ -1,6 +1,6 @@
 import { PairHourData } from './../types/schema'
 /* eslint-disable prefer-const */
-import { BigInt, BigDecimal, EthereumEvent } from '@graphprotocol/graph-ts'
+import { BigInt, BigDecimal, ethereum } from '@graphprotocol/graph-ts'
 import { Pair, Bundle, Token, HyperswapFactory, HyperswapDayData, PairDayData, TokenDayData } from '../types/schema'
 import { ONE_BI, ZERO_BD, ZERO_BI, FACTORY_ADDRESS } from './helpers'
 
@@ -8,8 +8,11 @@ import { ONE_BI, ZERO_BD, ZERO_BI, FACTORY_ADDRESS } from './helpers'
 const maxTokenDayDatas = 10
 const maxPairDayDatas = 10
 
-export function updateHyperswapDayData(event: EthereumEvent): void {
+export function updateHyperswapDayData(event: ethereum.Event): void {
   let hyperswap = HyperswapFactory.load(FACTORY_ADDRESS)
+  if (!hyperswap) {
+    return
+  }
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
   let dayStartTimestamp = dayID * 86400
@@ -30,13 +33,16 @@ export function updateHyperswapDayData(event: EthereumEvent): void {
     hyperswapDayData.save()
   }
   hyperswapDayData = HyperswapDayData.load(dayID.toString())
+  if (!hyperswapDayData) {
+    return
+  }
   hyperswapDayData.totalLiquidityUSD = hyperswap.totalLiquidityUSD
   hyperswapDayData.totalLiquidityFTM = hyperswap.totalLiquidityFTM
   hyperswapDayData.txCount = hyperswap.txCount
   hyperswapDayData.save()
 }
 
-export function updatePairDayData(event: EthereumEvent): void {
+export function updatePairDayData(event: ethereum.Event): void {
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
   let dayStartTimestamp = dayID * 86400
@@ -45,25 +51,33 @@ export function updatePairDayData(event: EthereumEvent): void {
     .concat('-')
     .concat(BigInt.fromI32(dayID).toString())
   let pair = Pair.load(event.address.toHexString())
+  if (!pair) {
+    return
+  }
   let pairDayData = PairDayData.load(dayPairID)
   if (pairDayData == null) {
     let pairDayData = new PairDayData(dayPairID)
     let pair = Pair.load(event.address.toHexString())
-    pairDayData.totalSupply = pair.totalSupply
-    pairDayData.date = dayStartTimestamp
-    pairDayData.token0 = pair.token0
-    pairDayData.token1 = pair.token1
-    pairDayData.pairAddress = event.address
-    pairDayData.reserve0 = ZERO_BD
-    pairDayData.reserve1 = ZERO_BD
-    pairDayData.reserveUSD = ZERO_BD
-    pairDayData.dailyVolumeToken0 = ZERO_BD
-    pairDayData.dailyVolumeToken1 = ZERO_BD
-    pairDayData.dailyVolumeUSD = ZERO_BD
-    pairDayData.dailyTxns = ZERO_BI
-    pairDayData.save()
+    if (pairDayData && pair) {
+      pairDayData.totalSupply = pair.totalSupply
+      pairDayData.date = dayStartTimestamp
+      pairDayData.token0 = pair.token0
+      pairDayData.token1 = pair.token1
+      pairDayData.pairAddress = event.address
+      pairDayData.reserve0 = ZERO_BD
+      pairDayData.reserve1 = ZERO_BD
+      pairDayData.reserveUSD = ZERO_BD
+      pairDayData.dailyVolumeToken0 = ZERO_BD
+      pairDayData.dailyVolumeToken1 = ZERO_BD
+      pairDayData.dailyVolumeUSD = ZERO_BD
+      pairDayData.dailyTxns = ZERO_BI
+      pairDayData.save()
+    }
   }
   pairDayData = PairDayData.load(dayPairID)
+  if (!pairDayData) {
+    return
+  }
   pairDayData.totalSupply = pair.totalSupply
   pairDayData.reserve0 = pair.reserve0
   pairDayData.reserve1 = pair.reserve1
@@ -72,7 +86,7 @@ export function updatePairDayData(event: EthereumEvent): void {
   pairDayData.save()
 }
 
-export function updatePairHourData(event: EthereumEvent): void {
+export function updatePairHourData(event: ethereum.Event): void {
   let timestamp = event.block.timestamp.toI32()
   let hourIndex = timestamp / 3600 // get unique hour within unix history
   let hourStartUnix = hourIndex * 3600 // want the rounded effect
@@ -81,6 +95,9 @@ export function updatePairHourData(event: EthereumEvent): void {
     .concat('-')
     .concat(BigInt.fromI32(hourIndex).toString())
   let pair = Pair.load(event.address.toHexString())
+  if (!pair) {
+    return
+  }
   let pairHourData = PairHourData.load(hourPairID)
   if (pairHourData == null) {
     let pairHourData = new PairHourData(hourPairID)
@@ -96,6 +113,9 @@ export function updatePairHourData(event: EthereumEvent): void {
     pairHourData.save()
   }
   pairHourData = PairHourData.load(hourPairID)
+  if (!pairHourData) {
+    return
+  }
   pairHourData.reserve0 = pair.reserve0
   pairHourData.reserve1 = pair.reserve1
   pairHourData.reserveUSD = pair.reserveUSD
@@ -103,8 +123,11 @@ export function updatePairHourData(event: EthereumEvent): void {
   pairHourData.save()
 }
 
-export function updateTokenDayData(token: Token, event: EthereumEvent): void {
+export function updateTokenDayData(token: Token, event: ethereum.Event): void {
   let bundle = Bundle.load('1')
+  if (!bundle) {
+    return
+  }
   let timestamp = event.block.timestamp.toI32()
   let dayID = timestamp / 86400
   let dayStartTimestamp = dayID * 86400
@@ -114,11 +137,15 @@ export function updateTokenDayData(token: Token, event: EthereumEvent): void {
     .concat(BigInt.fromI32(dayID).toString())
 
   let tokenDayData = TokenDayData.load(tokenDayID)
+  let derivedFTM = token.derivedFTM;
+  if (!derivedFTM) {
+    return
+  }
   if (tokenDayData == null) {
     let tokenDayData = new TokenDayData(tokenDayID)
     tokenDayData.date = dayStartTimestamp
     tokenDayData.token = token.id
-    tokenDayData.priceUSD = token.derivedFTM.times(bundle.ftmPrice)
+    tokenDayData.priceUSD = derivedFTM.times(bundle.ftmPrice)
     tokenDayData.dailyVolumeToken = ZERO_BD
     tokenDayData.dailyVolumeFTM = ZERO_BD
     tokenDayData.dailyVolumeUSD = ZERO_BD
@@ -131,7 +158,10 @@ export function updateTokenDayData(token: Token, event: EthereumEvent): void {
     tokenDayData.save()
   }
   tokenDayData = TokenDayData.load(tokenDayID)
-  tokenDayData.priceUSD = token.derivedFTM.times(bundle.ftmPrice)
+  if (!tokenDayData) {
+    return
+  }
+  tokenDayData.priceUSD = derivedFTM.times(bundle.ftmPrice)
   tokenDayData.totalLiquidityToken = token.totalLiquidity
   tokenDayData.totalLiquidityFTM = token.totalLiquidity.times(token.derivedFTM as BigDecimal)
   tokenDayData.totalLiquidityUSD = tokenDayData.totalLiquidityFTM.times(bundle.ftmPrice)

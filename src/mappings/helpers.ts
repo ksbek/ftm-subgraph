@@ -1,5 +1,5 @@
 /* eslint-disable prefer-const */
-import { log, BigInt, BigDecimal, Address, EthereumEvent } from '@graphprotocol/graph-ts'
+import { log, BigInt, BigDecimal, Address, ethereum } from '@graphprotocol/graph-ts'
 import { ERC20 } from '../types/Factory/ERC20'
 import { ERC20SymbolBytes } from '../types/Factory/ERC20SymbolBytes'
 import { ERC20NameBytes } from '../types/Factory/ERC20NameBytes'
@@ -108,9 +108,9 @@ export function fetchTokenTotalSupply(tokenAddress: Address): BigInt {
   let totalSupplyValue = null
   let totalSupplyResult = contract.try_totalSupply()
   if (!totalSupplyResult.reverted) {
-    totalSupplyValue = totalSupplyResult as i32
+    totalSupplyValue = totalSupplyResult.value.toI32()
   }
-  return BigInt.fromI32(totalSupplyValue as i32)
+  return BigInt.fromI32(totalSupplyValue)
 }
 
 export function fetchTokenDecimals(tokenAddress: Address): BigInt {
@@ -121,7 +121,7 @@ export function fetchTokenDecimals(tokenAddress: Address): BigInt {
   if (!decimalResult.reverted) {
     decimalValue = decimalResult.value
   }
-  return BigInt.fromI32(decimalValue as i32)
+  return BigInt.fromI32(decimalValue)
 }
 
 export function createLiquidityPosition(exchange: Address, user: Address): LiquidityPosition {
@@ -132,13 +132,15 @@ export function createLiquidityPosition(exchange: Address, user: Address): Liqui
   let liquidityTokenBalance = LiquidityPosition.load(id)
   if (liquidityTokenBalance === null) {
     let pair = Pair.load(exchange.toHexString())
-    pair.liquidityProviderCount = pair.liquidityProviderCount.plus(ONE_BI)
-    liquidityTokenBalance = new LiquidityPosition(id)
-    liquidityTokenBalance.liquidityTokenBalance = ZERO_BD
-    liquidityTokenBalance.pair = exchange.toHexString()
-    liquidityTokenBalance.user = user.toHexString()
-    liquidityTokenBalance.historicalSnapshots = []
-    liquidityTokenBalance.save()
+    if (pair) {
+      pair.liquidityProviderCount = pair.liquidityProviderCount.plus(ONE_BI)
+      liquidityTokenBalance = new LiquidityPosition(id)
+      liquidityTokenBalance.liquidityTokenBalance = ZERO_BD
+      liquidityTokenBalance.pair = exchange.toHexString()
+      liquidityTokenBalance.user = user.toHexString()
+      liquidityTokenBalance.historicalSnapshots = []
+      liquidityTokenBalance.save()
+    }
   }
   if (liquidityTokenBalance == null) log.error('LiquidityTokenBalance is null', [id])
   return liquidityTokenBalance as LiquidityPosition
@@ -153,12 +155,33 @@ export function createUser(address: Address): void {
   }
 }
 
-export function createLiquiditySnapshot(position: LiquidityPosition, event: EthereumEvent): void {
+export function createLiquiditySnapshot(position: LiquidityPosition, event: ethereum.Event): void {
   let timestamp = event.block.timestamp.toI32()
   let bundle = Bundle.load('1')
+  if (!bundle) {
+    return
+  }
   let pair = Pair.load(position.pair)
+  if (!pair) {
+    return
+  }
   let token0 = Token.load(pair.token0)
+  if (!token0) {
+    return
+  }
   let token1 = Token.load(pair.token1)
+  if (!token1) {
+    return
+  }
+
+  let derivedFTM0 = token0.derivedFTM;
+  if (!derivedFTM0) {
+    return
+  }
+  let derivedFTM1 = token1.derivedFTM;
+  if (!derivedFTM1) {
+    return
+  }
 
   // create new snapshot
   let snapshot = new LiquidityPositionSnapshot(position.id.concat(timestamp.toString()))
@@ -166,8 +189,8 @@ export function createLiquiditySnapshot(position: LiquidityPosition, event: Ethe
   snapshot.block = event.block.number.toI32()
   snapshot.user = position.user
   snapshot.pair = position.pair
-  snapshot.token0PriceUSD = token0.derivedFTM.times(bundle.ftmPrice)
-  snapshot.token1PriceUSD = token1.derivedFTM.times(bundle.ftmPrice)
+  snapshot.token0PriceUSD = derivedFTM0.times(bundle.ftmPrice)
+  snapshot.token1PriceUSD = derivedFTM1.times(bundle.ftmPrice)
   snapshot.reserve0 = pair.reserve0
   snapshot.reserve1 = pair.reserve1
   snapshot.reserveUSD = pair.reserveUSD
@@ -177,6 +200,9 @@ export function createLiquiditySnapshot(position: LiquidityPosition, event: Ethe
 
   // add snapshot to lqiudiity position array
   let snapshots = position.historicalSnapshots
+  if (!snapshots) {
+    return
+  }
   snapshots.push(snapshot.id)
   position.historicalSnapshots = snapshots
   position.save()

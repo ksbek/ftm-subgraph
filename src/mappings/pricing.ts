@@ -49,12 +49,21 @@ export function findFtmPerToken(token: Token): BigDecimal {
     let pairAddress = factoryContract.getPair(Address.fromString(token.id), Address.fromString(WHITELIST[i]))
     if (pairAddress.toHexString() != ADDRESS_ZERO) {
       let pair = Pair.load(pairAddress.toHexString())
+      if (!pair) {
+        continue
+      }
       if (pair.token0 == token.id) {
         let token1 = Token.load(pair.token1)
+        if (!token1) {
+          continue
+        }
         return pair.token1Price.times(token1.derivedFTM as BigDecimal) // return token1 per our token * FTM per token 1
       }
       if (pair.token1 == token.id) {
         let token0 = Token.load(pair.token0)
+        if (!token0) {
+          continue
+        }
         return pair.token0Price.times(token0.derivedFTM as BigDecimal) // return token0 per our token * FTM per token 0
       }
     }
@@ -76,8 +85,19 @@ export function getTrackedVolumeUSD(
   pair: Pair
 ): BigDecimal {
   let bundle = Bundle.load('1')
-  let price0 = token0.derivedFTM.times(bundle.ftmPrice)
-  let price1 = token1.derivedFTM.times(bundle.ftmPrice)
+  if (!bundle) {
+    return ZERO_BD
+  }
+  let derivedFTM0 = token0.derivedFTM;
+  if (!derivedFTM0) {
+    return ZERO_BD
+  }
+  let price0 = derivedFTM0.times(bundle.ftmPrice)
+  let derivedFTM1 = token1.derivedFTM;
+  if (!derivedFTM1) {
+    return ZERO_BD
+  }
+  let price1 = derivedFTM1.times(bundle.ftmPrice)
 
   // if less than 5 LPs, require high minimum reserve amount amount or return 0
   if (pair.liquidityProviderCount.lt(BigInt.fromI32(5))) {
@@ -120,8 +140,19 @@ export function getTrackedLiquidityUSD(
   token1: Token
 ): BigDecimal {
   let bundle = Bundle.load('1')
-  let price0 = token0.derivedFTM.times(bundle.ftmPrice)
-  let price1 = token1.derivedFTM.times(bundle.ftmPrice)
+  if (!bundle) {
+    return ZERO_BD
+  }
+  let derivedFTM0 = token0.derivedFTM;
+  if (!derivedFTM0) {
+    return ZERO_BD
+  }
+  let price0 = derivedFTM0.times(bundle.ftmPrice)
+  let derivedFTM1 = token1.derivedFTM;
+  if (!derivedFTM1) {
+    return ZERO_BD
+  }
+  let price1 = derivedFTM1.times(bundle.ftmPrice)
 
   // both are whitelist tokens, take average of both amounts
   if (WHITELIST.includes(token0.id) && WHITELIST.includes(token1.id)) {
